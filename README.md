@@ -1,4 +1,4 @@
-k
+
 🌞 Solar Panel Dust Analysis & Automated Cleaning System
 
 An AI-driven, IoT-enabled solar panel maintenance system that detects dust accumulation, automates water-efficient cleaning, and improves solar energy output. Designed for smart cities, municipal solar plants, and large-scale renewable energy deployments, this project addresses real-world efficiency loss using computer vision, embedded systems, and intelligent automation.
