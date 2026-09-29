@@ -99,4 +99,4 @@ Patent Range: Automated Solar Panel Cleaning Systems
 ✔ Government and industry relevance
 ✔ Strong sustainability focus
 
-This project demonstrates end-to-end system design, combining AI, embedded systems, and renewable energy engineering into a deployable real-world solution.
+This project demonstrates end-to-end system design, combining AI, embedded systems, and renewable energy engineering into a deployable real-world solution..
