@@ -11,6 +11,14 @@ A focused inspection tool that turns a solar-panel image into a dust reading and
 
 ---
 
+## Interface glimpse
+
+Solaris uses a compact inspection cockpit: upload a panel image, see the model decision, and scan the operational pulse and dust trend without leaving the page.
+
+![Solaris inspection dashboard](static/images/solaris-dashboard-preview.svg)
+
+The interface supports light and dark themes, drag-and-drop uploads, local inspection history, condition filters, CSV export, and responsive layouts for smaller screens.
+
 ## One image. One useful answer.
 
 Upload a panel photo. Solaris extracts visual features with VGG16, classifies them with the bundled SVM, and returns a dust estimate with practical maintenance guidance.
