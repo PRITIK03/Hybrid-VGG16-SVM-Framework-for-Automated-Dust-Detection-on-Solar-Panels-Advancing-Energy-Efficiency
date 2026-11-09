@@ -1,102 +1,66 @@
+<div align="center">
 
-🌞 Solar Panel Dust Analysis & Automated Cleaning System.
+# Solaris
+### The quiet cost of a dusty panel is still a cost.
 
-An AI-driven, IoT-enabled solar panel maintenance system that detects dust accumulation, automates water-efficient cleaning, and improves solar energy output. Designed for smart cities, municipal solar plants, and large-scale renewable energy deployments, this project addresses real-world efficiency loss using computer vision, embedded systems, and intelligent automation.
+A focused inspection tool that turns a solar-panel image into a dust reading and a clear next step.
 
-🚀 Problem Statement
+**Flask · VGG16 features · SVM**
 
-Dust accumulation reduces solar panel efficiency by 20–30%, leading to significant power loss, increased maintenance costs, and water-intensive manual cleaning. Existing robotic cleaners are expensive and difficult to scale. A smart, automated, and cost-effective solution is required.
+</div>
 
-🎯 Objective
+---
 
-To develop an automated solar panel dust detection and cleaning system that:
+## One image. One useful answer.
 
-Restores efficiency only when required
+Upload a panel photo. Solaris extracts visual features with VGG16, classifies them with the bundled SVM, and returns a dust estimate with practical maintenance guidance.
 
-Reduces water consumption
+The interface is intentionally small: inspect, understand, act. It does not claim live sensor readings, automatic cleaner control, or site-wide analytics unless those systems are connected separately.
 
-Minimizes manual intervention
+## How it works
 
-Scales for rooftop and large solar installations
+```text
+Panel image → validation → VGG16 features → scaled features → SVM dust estimate
+```
 
-💡 Solution Overview
+- Accepts JPG and PNG images up to 8 MB.
+- Rejects unsupported or invalid image files.
+- Limits analysis requests to help protect the service.
+- Removes the temporary server-side upload after processing.
+- Keeps inspection history in the current browser only; it is not shared or synced.
 
-The system uses light sensors and camera-based AI analysis to detect dust levels on solar panels. When dust exceeds a predefined threshold, an ESP32-controlled cleaning mechanism activates a mist spray and wiper to safely clean the panel. All results are visualized on a real-time dashboard.
+## Start locally
 
-⚙️ Key Features
+Use Python 3.10 or later. Install the packages used by `app.py` in your environment: Flask, Flask-Limiter, TensorFlow, Pillow, NumPy, and Joblib. The repository also needs the compatible scikit-learn version used to create its serialized models.
 
-• AI-based dust detection using VGG16 + SVM
-• Sensor-based dust estimation using BH1750
-• ESP32-controlled automated cleaning workflow
-• Mist spray + mechanical wiper for water-efficient cleaning
-• Real-time dashboard with analytics
-• Environmental and financial impact estimation
-• IoT-ready and cloud-scalable architecture
-• Fallback mode if ML models are unavailable
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install Flask Flask-Limiter tensorflow pillow numpy joblib scikit-learn
+python app.py
+```
 
-🧠 Technology Stack
+Open <http://127.0.0.1:5000>.
 
-Backend: Python, Flask, TensorFlow, scikit-learn, Joblib
-Frontend: HTML5, CSS3, JavaScript, Tailwind CSS
-AI/ML: VGG16 (feature extraction), SVM (classification)
-Hardware: ESP32, BH1750, Camera Module, Pump, Motor Driver, Wiper
+On first startup, TensorFlow may download the ImageNet VGG16 weights. The SVM classifier and scaler must be present at `Models/svm_classifier.pkl` and `Models/scaler.pkl`.
 
-🏗️ Working Principle
+## Project map
 
-Sensors and camera detect dust accumulation
+```text
+app.py                 Flask routes and image-analysis pipeline
+Models/                SVM classifier and feature scaler
+ templates/index.html  Inspection interface
+static/css/            Application styles
+static/js/             Upload, results, theme, and history behavior
+```
 
-ESP32 evaluates dust threshold (>40%)
+## Important limits
 
-AI model predicts dust severity
+- This is an image-based prototype, not a complete IoT deployment. The README describes BH1750 sensors, ESP32 control, and cleaning hardware, but those integrations are not implemented in the Flask app.
+- The displayed dust score is the model output; it is not a calibrated measurement of lost energy, cleaning savings, or panel efficiency.
+- Inspection history is browser-local. There are no user accounts, shared workspaces, database, or cross-device records.
+- `joblib` model files should only be loaded from trusted sources. Keep production secrets out of source control and run the Flask application behind a production WSGI server rather than Flask's development server.
 
-Cleaning system activates mist spray + wiper
+## Model and project
 
-Dashboard updates efficiency and analytics
-
-📊 Prototype Results
-
-• ~25% improvement in solar panel efficiency
-• ~40% reduction in water usage
-• Fully automated operation
-• Tested on a 60-cell solar panel
-
-💰 Cost & Feasibility
-
-Total prototype cost: ₹66,460
-Commercial robotic cleaners cost ₹1–2 lakh per unit
-Low maintenance, high scalability, and suitable for government deployment
-
-🌱 Sustainability Impact
-
-• Water conservation
-• Reduced labor dependency
-• Increased renewable energy output
-• Supports India’s Smart City and Clean Energy missions
-
-🏙️ Applications
-
-Municipal solar plants, rooftop solar systems, government buildings, industrial solar farms, smart city infrastructure, and large-scale renewable installations.
-
-🔮 Future Scope
-
-AI-based predictive cleaning, cloud analytics, mobile monitoring app, real IoT sensor integration, multi-site solar management, automated alerts, and smart scheduling.
-
-📁 Project Structure
-
-Advanced solar panel project with Flask backend, ML models, modular frontend, IoT-ready static assets, and scalable architecture.
-
-🏷️ Domain Classification
-
-Domain Range: 29–99
-Category: Renewable Energy | IoT | Mechatronics | Automation
-Patent Range: Automated Solar Panel Cleaning Systems
-
-🏆 Why This Project Stands Out
-
-✔ Real-world problem solving
-✔ AI + IoT + hardware integration
-✔ Scalable and cost-effective design
-✔ Government and industry relevance
-✔ Strong sustainability focus
-
-This project demonstrates end-to-end system design, combining AI, embedded systems, and renewable energy engineering into a deployable real-world solution..
+The project explores a hybrid computer-vision pipeline for identifying dust on solar panels. Model quality and operational claims should be validated against representative field data before using results for maintenance or commercial decisions.
