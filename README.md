@@ -15,7 +15,9 @@ A focused inspection tool that turns a solar-panel image into a dust reading and
 
 Solaris uses a compact inspection cockpit: upload a panel image, see the model decision, and scan the operational pulse and dust trend without leaving the page.
 
-![Solaris inspection dashboard](static/images/solaris-dashboard-preview.svg)
+| Light mode | Dark mode |
+|---|---|
+| ![Solaris light inspection dashboard](static/images/solaris-dashboard-preview.svg) | ![Solaris dark inspection dashboard](static/images/solaris-dashboard-preview-dark.svg) |
 
 The interface supports light and dark themes, drag-and-drop uploads, local inspection history, condition filters, CSV export, and responsive layouts for smaller screens.
 
