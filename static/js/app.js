@@ -23,7 +23,8 @@
       if (!Array.isArray(saved)) return [];
       return saved.filter((entry) => {
         const value = Number(entry && entry.value);
-        return Number.isFinite(value) && value >= 0 && value <= 100 && typeof (entry.date || entry.timestamp) === 'string' || Number.isFinite(value) && value >= 0 && value <= 100 && Number.isFinite(entry.timestamp);
+        return Number.isFinite(value) && value >= 0 && value <= 100
+          && (typeof (entry.date || entry.timestamp) === 'string' || Number.isFinite(entry.timestamp));
       }).map((entry) => ({
         value: Number(entry.value),
         name: typeof entry.name === 'string' ? entry.name.slice(0, 180) : 'Panel image',
@@ -151,6 +152,13 @@
     $('#lastReading').textContent = latest ? String(Math.round(latest.value)) : '—';
     $('#lastReadingUnit').textContent = latest ? '%' : '';
     $('#lastReadingNote').textContent = latest ? getCondition(latest.value).title : 'No inspections';
+    const trend = history.length > 1 ? history[0].value - history[1].value : null;
+    $('#pulseTrend').textContent = trend === null ? 'Waiting for data' : `${trend > 0 ? '+' : ''}${trend.toFixed(1)} pts`;
+    $('#pulseTrend').className = trend === null ? '' : trend > 0 ? 'is-rising' : trend < 0 ? 'is-falling' : 'is-steady';
+    const highCount = history.filter((entry) => entry.value >= 50).length;
+    $('#pulseAttention').textContent = highCount ? `${highCount} high dust` : 'No flags';
+    $('#pulseAttention').className = highCount ? 'is-alert' : '';
+    $('#pulseLastScan').textContent = latest ? displayDate(latest.date, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Not started';
     const empty = $('#historyEmpty');
     const content = $('#historyContent');
     const clearButton = $('#clearHistory');

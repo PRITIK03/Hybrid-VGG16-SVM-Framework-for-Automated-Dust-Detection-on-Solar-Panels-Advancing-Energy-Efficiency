@@ -36,6 +36,12 @@
           <article class="metric-card"><div class="metric-label">Latest dust level</div><div class="metric-value"><span id="lastReading">—</span><small class="metric-unit" id="lastReadingUnit"></small></div><div class="metric-note" id="lastReadingNote">No inspections</div><button class="metric-detail" type="button" data-kpi="dust">Details <span aria-hidden="true">→</span></button></article>
           <article class="metric-card metric-card-model"><div class="metric-label">Model</div><div class="metric-value engine-value">VGG16 <span>+</span> SVM</div><div class="metric-note"><span class="inline-dot"></span>Ready</div></article>
         </section>
+        <section class="pulse-strip" aria-label="Operational pulse">
+          <div class="pulse-intro"><span class="pulse-orbit" aria-hidden="true"></span><span><strong>Operational pulse</strong><small>Live from this workspace</small></span></div>
+          <div class="pulse-stat"><span>Trend</span><strong id="pulseTrend">Waiting for data</strong></div>
+          <div class="pulse-stat"><span>Attention</span><strong id="pulseAttention">No flags</strong></div>
+          <div class="pulse-stat"><span>Last scan</span><strong id="pulseLastScan">Not started</strong></div>
+        </section>
 
         <section class="workspace-grid" id="analysis" aria-label="Panel inspection">
           <article class="panel-card upload-card">
