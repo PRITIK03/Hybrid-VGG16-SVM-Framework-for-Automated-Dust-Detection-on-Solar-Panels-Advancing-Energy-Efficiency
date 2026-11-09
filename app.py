@@ -1,149 +1,198 @@
-from flask import Flask, render_template, request, jsonify
-from werkzeug.utils import secure_filename
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import GlobalAveragePooling2D
-from tensorflow.keras.applications import VGG16
-from tensorflow.keras.preprocessing.image import img_to_array, load_img
+from __future__ import annotations
+
+import logging
+import os
+import shutil
+import time
+from typing import Optional
+
 import joblib
 import numpy as np
-import os
-import logging
-from PIL import Image
+from flask import Flask, jsonify, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import time
-import shutil
+from PIL import Image, UnidentifiedImageError
+from tensorflow.keras import Model
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.layers import GlobalAveragePooling2D
+from tensorflow.keras.preprocessing.image import img_to_array, load_img
+from werkzeug.utils import secure_filename
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg'}
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB limit
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
+MODELS_DIR = os.path.join(BASE_DIR, "Models")
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "solar-clean-ai-secret")
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["ALLOWED_EXTENSIONS"] = {"png", "jpg", "jpeg"}
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
-# Rate limiter
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["100 per day", "10 per minute"]
+    default_limits=["100 per day", "10 per minute"],
 )
 
-# Load models
-def load_models():
+feature_extractor: Optional[Model] = None
+svm_classifier = None
+scaler = None
+
+
+def log_and_raise(message: str):
+    logging.error(message)
+    raise RuntimeError(message)
+
+
+def load_models() -> None:
     global feature_extractor, svm_classifier, scaler
+
     try:
-        base_model = VGG16(weights='imagenet', include_top=False, input_shape=(128, 128, 3))
-        feature_extractor = Model(inputs=base_model.input, outputs=GlobalAveragePooling2D()(base_model.output))
-        svm_classifier_path = os.path.join('Models', 'svm_classifier.pkl')
-        scaler_path = os.path.join('Models', 'scaler.pkl')
+        svm_classifier_path = os.path.join(MODELS_DIR, "svm_classifier.pkl")
+        scaler_path = os.path.join(MODELS_DIR, "scaler.pkl")
+
         if not os.path.exists(svm_classifier_path) or not os.path.exists(scaler_path):
-            raise FileNotFoundError("Model files not found")
+            log_and_raise("Model files not found in the Models directory.")
+
+        base_model = VGG16(weights="imagenet", include_top=False, input_shape=(128, 128, 3))
+        feature_extractor = Model(
+            inputs=base_model.input,
+            outputs=GlobalAveragePooling2D()(base_model.output),
+        )
+
         svm_classifier = joblib.load(svm_classifier_path)
         scaler = joblib.load(scaler_path)
-        logging.info("Models loaded successfully")
-    except Exception as e:
-        logging.error(f"Error loading models: {str(e)}")
-        raise
+        logging.info("ML models loaded successfully.")
+    except Exception as exc:
+        logging.exception("Failed to load model assets.")
+        raise RuntimeError(f"Model startup failed: {exc}") from exc
+
 
 try:
     load_models()
-except Exception as e:
-    logging.critical("Failed to start application due to model loading error")
-    raise SystemExit("Application cannot start. Check logs for details.")
+except Exception as exc:  # pragma: no cover - startup safety
+    logging.critical("Application cannot start because model assets failed to load.")
+    raise SystemExit(str(exc)) from exc
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-def verify_image(image_path):
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
+
+
+def verify_image(image_path: str) -> bool:
     try:
         with Image.open(image_path) as img:
-            img.verify()  # Check if image is valid
+            img.verify()
         return True
-    except Exception as e:
-        logging.error(f"Invalid image file: {str(e)}")
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        logging.error("Invalid image uploaded: %s", exc)
         return False
 
-@app.route('/analyze', methods=['POST'])
-@limiter.limit("5 per minute")  # Limit to 5 requests per minute per IP
-def analyze():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file selected'}), 400
-        
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
 
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        try:
-            start_time = time.time()
-            file.save(save_path)
-            
-            # Verify image integrity
-            if not verify_image(save_path):
-                os.remove(save_path)
-                return jsonify({'error': 'Invalid or corrupted image'}), 400
+def predict_dustiness(image_path: str) -> Optional[float]:
+    if feature_extractor is None or svm_classifier is None or scaler is None:
+        logging.error("Prediction attempted before model initialization.")
+        return None
 
-            dustiness = predict_dustiness(save_path)
-            if dustiness is not None:
-                processing_time = time.time() - start_time
-                logging.info(f"Processed file {filename} in {processing_time:.2f} seconds")
-                return jsonify({
-                    'success': True,
-                    'image_path': f"uploads/{filename}",
-                    'dustiness': dustiness,
-                    'confidence': round(dustiness / 100, 2)  # Optional: for future use
-                })
-            os.remove(save_path)
-            return jsonify({'error': 'Error processing image'}), 500
-        except Exception as e:
-            logging.error(f"Error processing file: {str(e)}")
-            if os.path.exists(save_path):
-                os.remove(save_path)
-            return jsonify({'error': 'Server error'}), 500
-        finally:
-            # Cleanup: Remove file after processing (optional, can be toggled)
-            if os.path.exists(save_path):
-                os.remove(save_path)
-    return jsonify({'error': 'Allowed file types: png, jpg, jpeg'}), 400
-
-def predict_dustiness(image_path):
     try:
         image = load_img(image_path, target_size=(128, 128))
         image_array = img_to_array(image) / 255.0
         image_array = np.expand_dims(image_array, axis=0)
-        features = feature_extractor.predict(image_array)
+
+        features = feature_extractor.predict(image_array, verbose=0)
         features = scaler.transform(features)
         dust_prob = svm_classifier.predict_proba(features)[:, 1][0]
-        return round(dust_prob * 100, 2)
-    except Exception as e:
-        logging.error(f"Prediction error: {str(e)}")
+
+        dustiness = round(float(dust_prob * 100), 2)
+        return max(0.0, min(100.0, dustiness))
+    except Exception as exc:
+        logging.exception("Prediction error while evaluating the image.")
         return None
 
-@app.route('/')
-def index():
-    return render_template('index.html')
 
-# Periodic cleanup of upload folder (optional)
-@app.route('/cleanup', methods=['POST'])
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/health")
+def health():
+    return jsonify(
+        {
+            "status": "ok",
+            "model_loaded": bool(feature_extractor and svm_classifier and scaler),
+            "upload_dir": app.config["UPLOAD_FOLDER"],
+        }
+    )
+
+
+@app.route("/analyze", methods=["POST"])
+@limiter.limit("5 per minute")
+def analyze():
+    if "file" not in request.files:
+        return jsonify({"error": "No file selected."}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected."}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Allowed file types: png, jpg, jpeg"}), 400
+
+    filename = secure_filename(file.filename)
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+
+    try:
+        start_time = time.time()
+        file.save(save_path)
+
+        if not verify_image(save_path):
+            return jsonify({"error": "Invalid or corrupted image."}), 400
+
+        dustiness = predict_dustiness(save_path)
+        if dustiness is None:
+            return jsonify({"error": "Failed to process the uploaded image."}), 500
+
+        elapsed = time.time() - start_time
+        logging.info("Processed %s in %.2f seconds.", filename, elapsed)
+
+        return jsonify(
+            {
+                "success": True,
+                "image_path": f"uploads/{filename}",
+                "dustiness": dustiness,
+                "confidence": round(min(max(dustiness / 100.0, 0.0), 1.0), 2),
+            }
+        )
+    except Exception as exc:
+        logging.exception("Error while processing uploaded image.")
+        return jsonify({"error": "Server error while processing the image."}), 500
+    finally:
+        if os.path.exists(save_path):
+            os.remove(save_path)
+
+
+@app.route("/cleanup", methods=["POST"])
 def cleanup_uploads():
     try:
-        upload_folder = app.config['UPLOAD_FOLDER']
+        upload_folder = app.config["UPLOAD_FOLDER"]
         if os.path.exists(upload_folder):
             shutil.rmtree(upload_folder)
             os.makedirs(upload_folder, exist_ok=True)
-            logging.info("Upload folder cleaned up")
-            return jsonify({'success': True, 'message': 'Upload folder cleaned'}), 200
-        return jsonify({'error': 'Upload folder does not exist'}), 404
-    except Exception as e:
-        logging.error(f"Error cleaning upload folder: {str(e)}")
-        return jsonify({'error': 'Server error'}), 500
+            logging.info("Upload folder cleaned successfully.")
+            return jsonify({"success": True, "message": "Upload folder cleaned."}), 200
+        return jsonify({"error": "Upload folder does not exist."}), 404
+    except Exception as exc:
+        logging.exception("Error while cleaning uploads.")
+        return jsonify({"error": "Server error while cleaning uploads."}), 500
 
-if __name__ == '__main__':
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-    app.run(debug=True)
+
+if __name__ == "__main__":
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)
